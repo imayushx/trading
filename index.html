@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Institutional Multi-Timeframe Strategy Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+            padding: 40px 0;
+        }
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
+        }
+        .subtitle {
+            font-size: 1.2rem;
+            color: #b0b0b0;
+            font-weight: 300;
+        }
+        .section {
+            margin-bottom: 60px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        .section h2 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #00ff88;
+            text-align: center;
+        }
+        .overview p {
+            font-size: 1.1rem;
+            text-align: center;
+            max-width: 800px;
+            margin: 0 auto;
+            color: #d0d0d0;
+        }
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .metric-card {
+            background: rgba(0, 255, 136, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            border: 1px solid rgba(0, 255, 136, 0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 255, 136, 0.2);
+        }
+        .metric-title {
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: #00d4ff;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff88;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+        }
+        .equity-section {
+            text-align: center;
+        }
+        .equity-image {
+            max-width: 100%;
+            height: auto;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            margin-top: 20px;
+        }
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            .section {
+                padding: 20px;
+            }
+            .metrics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Institutional Multi-Timeframe Strategy (SMC/ICT)</h1>
+            <div class="subtitle">Algorithmic Trading Dashboard</div>
+        </header>
+
+        <section class="section overview">
+            <h2>Project Overview</h2>
+            <p>This is a rule-based algorithmic trading system that trades XAUUSD and EURUSD pairs. It utilizes Smart Money Concepts (SMC), Order Blocks, and Time-based Killzones to identify high-probability trade setups while eliminating emotional decision-making. The strategy focuses on institutional-level analysis to capture market inefficiencies across multiple timeframes.</p>
+        </section>
+
+        <section class="section">
+            <h2>Performance Metrics</h2>
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">Win Rate</div>
+                    <div class="metric-value">[ENTER YOUR STAT HERE]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Profit Factor</div>
+                    <div class="metric-value">[ENTER YOUR STAT HERE]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Max Drawdown</div>
+                    <div class="metric-value">[ENTER YOUR STAT HERE]</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Sharpe Ratio</div>
+                    <div class="metric-value">[ENTER YOUR STAT HERE]</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="section equity-section">
+            <h2>Equity Curve</h2>
+            <img src="performance.png" alt="Equity Curve" class="equity-image">
+        </section>
+    </div>
+</body>
+</html>
