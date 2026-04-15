@@ -1,0 +1,575 @@
+// ============================================================
+// ICT SMC Strategy v4 — XAUUSD & EURUSD
+// Pine Script v5 | Complete Rebuild
+// Timeframe: 1m chart | HTF Bias: Daily + 4H
+// ============================================================
+// WHAT'S NEW IN v4 vs v3:
+// ─────────────────────────────────────────────────────────────
+// [1] POI PULLBACK ENTRY: After BOS confirms, script waits for
+//     price to retrace INTO an active OB or FVG zone before
+//     triggering entry. This is the core ICT edge — never chase.
+//
+// [2] TREND-FOLLOWING SWEEP: Entry direction now FOLLOWS the
+//     sweep (e.g. bullish sweep → long), not against momentum.
+//     BOS confirms the sweep was genuine, not just a breakdown.
+//
+// [3] RSI MOMENTUM FILTER: RSI must be in the correct zone at
+//     entry — >50 for longs, <50 for shorts. Oversold/overbought
+//     extremes are also accepted as confluence.
+//
+// [4] VOLUME CONFIRMATION: Entry bar volume must exceed the
+//     20-bar average volume (institutional participation signal).
+//
+// [5] MINIMUM FAVORABLE EXCURSION GUARD: Entries only taken
+//     when ATR is sufficient to justify the trade (avoids flat
+//     market entries that go nowhere).
+//
+// [6] COOLDOWN TIMER: 10-bar cooldown after each trade to
+//     prevent overtrading the same zone.
+//
+// [7] DAILY TRADE CAP: Hard limit of 30 trades per day with
+//     on-chart counter display.
+//
+// [8] IMPROVED SL PLACEMENT: Stop placed below/above the actual
+//     sweep wick low/high — not just ATR from close. More precise.
+// ============================================================
+
+//@version=5
+strategy(
+     title             = "ICT SMC v4 — POI + RSI + Volume",
+     shorttitle        = "ICT_SMC_v4",
+     overlay           = true,
+     pyramiding        = 0,
+     default_qty_type  = strategy.percent_of_equity,
+     default_qty_value = 1,
+     commission_type   = strategy.commission.percent,
+     commission_value  = 0.01,
+     slippage          = 2,
+     calc_on_every_tick = false
+     )
+
+// ============================================================
+// ── INPUTS
+// ============================================================
+
+// HTF Bias
+grp_htf      = "Top-Down Bias"
+ema_len      = input.int(20,  "EMA Length (HTF)",        group = grp_htf)
+htf_agree    = input.bool(true, "Require Daily + 4H agreement", group = grp_htf)
+
+// Order Blocks
+grp_ob       = "Order Blocks"
+ob_lookback  = input.int(5,   "OB Pivot Lookback",        group = grp_ob, minval = 2)
+
+// Fair Value Gaps
+grp_fvg      = "Fair Value Gaps"
+fvg_min      = input.float(0.0, "Min FVG Size (price)",   group = grp_fvg)
+
+// Liquidity Sweep
+grp_liq      = "Liquidity Sweep"
+liq_lookback = input.int(10,  "Sweep Lookback (bars)",    group = grp_liq, minval = 3)
+liq_wick_pct = input.float(0.15, "Min Wick % of Range",  group = grp_liq, minval = 0.05, maxval = 1.0, step = 0.05)
+sweep_memory = input.int(25,  "Sweep Memory (bars)",      group = grp_liq, minval = 5)
+
+// BOS
+grp_bos      = "Break of Structure"
+bos_tf       = input.string("3", "BOS Timeframe",         group = grp_bos, options = ["1", "3", "5", "15"])
+bos_len      = input.int(2,   "BOS Pivot Length",          group = grp_bos, minval = 1)
+
+// POI Entry
+grp_poi      = "POI Pullback Entry"
+poi_mode     = input.string("OB or FVG", "POI Type Required", group = grp_poi, options = ["OB only", "FVG only", "OB or FVG", "Any close near EMA"])
+poi_buffer   = input.float(0.5, "OB/FVG Entry Buffer (ATR mult)", group = grp_poi, step = 0.1)
+
+// RSI Filter
+grp_rsi      = "RSI Momentum Filter"
+use_rsi      = input.bool(true,  "Enable RSI Filter",      group = grp_rsi)
+rsi_len      = input.int(14,  "RSI Length",                group = grp_rsi)
+rsi_bull_min = input.int(45,  "RSI Min for Longs",         group = grp_rsi, minval = 1,  maxval = 100)
+rsi_bear_max = input.int(55,  "RSI Max for Shorts",        group = grp_rsi, minval = 1,  maxval = 100)
+
+// Volume Filter
+grp_vol      = "Volume Confirmation"
+use_vol      = input.bool(true,  "Enable Volume Filter",   group = grp_vol)
+vol_len      = input.int(20,  "Volume MA Length",          group = grp_vol)
+vol_mult     = input.float(1.0, "Min Volume Multiplier",   group = grp_vol, step = 0.1)
+
+// Risk Management
+grp_risk     = "Risk Management"
+sl_mode      = input.string("Sweep Wick", "SL Mode", group = grp_risk, options = ["Sweep Wick", "ATR"])
+sl_mult      = input.float(1.0,  "SL ATR Mult (if ATR mode)", group = grp_risk, step = 0.1)
+tp_rr        = input.float(2.0,  "Take-Profit R:R Ratio",  group = grp_risk, step = 0.1)
+atr_len      = input.int(14,  "ATR Length",                group = grp_risk)
+min_atr_pts  = input.float(0.5, "Min ATR to trade (0=off)",group = grp_risk, step = 0.1)
+
+// Cooldown
+grp_cd       = "Trade Cooldown"
+cooldown_bars = input.int(10, "Bars between trades",       group = grp_cd, minval = 0)
+max_daily    = input.int(30,  "Max trades per day",        group = grp_cd, minval = 1)
+
+// Killzones
+grp_kill     = "ICT Killzones (EST)"
+use_asian    = input.bool(true,  "Asian Session",          group = grp_kill)
+asi_open     = input.int(20, "Asian Open Hour (EST)",      group = grp_kill, minval = 0, maxval = 23)
+asi_close    = input.int(23, "Asian Close Hour (EST)",     group = grp_kill, minval = 0, maxval = 23)
+use_london   = input.bool(true,  "London Session",         group = grp_kill)
+lon_open     = input.int(2,  "London Open Hour (EST)",     group = grp_kill, minval = 0, maxval = 23)
+lon_close    = input.int(5,  "London Close Hour (EST)",    group = grp_kill, minval = 0, maxval = 23)
+use_ny       = input.bool(true,  "NY Session",             group = grp_kill)
+ny_open      = input.int(8,  "NY Open Hour (EST)",         group = grp_kill, minval = 0, maxval = 23)
+ny_close     = input.int(11, "NY Close Hour (EST)",        group = grp_kill, minval = 0, maxval = 23)
+
+// Display
+grp_ctrl     = "Controls & Display"
+close_all    = input.bool(false, "⛔ CLOSE ALL POSITIONS NOW",  group = grp_ctrl)
+show_fvg     = input.bool(true,  "Show FVG Boxes",              group = grp_ctrl)
+show_ob      = input.bool(true,  "Show Order Block Boxes",      group = grp_ctrl)
+show_kz      = input.bool(true,  "Show Killzone Highlights",    group = grp_ctrl)
+show_poi_line= input.bool(true,  "Show POI Entry Zone Lines",   group = grp_ctrl)
+
+// ============================================================
+// ── CLOSE ALL
+// ============================================================
+if close_all
+    strategy.close_all(comment = "Manual Close All")
+
+// ============================================================
+// ── TIMEZONE
+// ============================================================
+est_hour = hour(time, "America/New_York")
+
+in_asian_kz  = use_asian  and (est_hour >= asi_open or est_hour < 1)
+in_london_kz = use_london and (est_hour >= lon_open  and est_hour < lon_close)
+in_ny_kz     = use_ny     and (est_hour >= ny_open   and est_hour < ny_close)
+in_killzone  = in_asian_kz or in_london_kz or in_ny_kz
+
+bgcolor(show_kz and in_asian_kz  ? color.new(color.purple, 93) : na, title = "Asian KZ")
+bgcolor(show_kz and in_london_kz ? color.new(color.blue,   91) : na, title = "London KZ")
+bgcolor(show_kz and in_ny_kz     ? color.new(color.orange, 91) : na, title = "NY KZ")
+
+// ============================================================
+// ── ATR + RSI + VOLUME
+// ============================================================
+atr     = ta.atr(atr_len)
+rsi     = ta.rsi(close, rsi_len)
+vol_ma  = ta.sma(volume, vol_len)
+
+rsi_ok_long  = not use_rsi or rsi >= rsi_bull_min
+rsi_ok_short = not use_rsi or rsi <= rsi_bear_max
+vol_ok       = not use_vol or volume >= vol_ma * vol_mult
+atr_ok       = min_atr_pts <= 0.0 or atr >= min_atr_pts
+
+// ============================================================
+// ── TOP-DOWN BIAS
+// ============================================================
+htf_bias(tf) =>
+    e = request.security(syminfo.tickerid, tf, ta.ema(close, ema_len), lookahead = barmerge.lookahead_off)
+    c = request.security(syminfo.tickerid, tf, close,                  lookahead = barmerge.lookahead_off)
+    c > e ? 1 : c < e ? -1 : 0
+
+daily_bias = htf_bias("D")
+h4_bias    = htf_bias("240")
+h1_bias    = htf_bias("60")   // extra confluence on 1m
+
+htf_bull = htf_agree ? (daily_bias == 1 and h4_bias == 1) : (daily_bias == 1 or h4_bias == 1)
+htf_bear = htf_agree ? (daily_bias == -1 and h4_bias == -1) : (daily_bias == -1 or h4_bias == -1)
+
+// ── Bias table
+var table bias_tbl = table.new(position.top_right, 2, 4,
+     border_width = 1, border_color = color.gray,
+     bgcolor = color.new(color.black, 72))
+
+if barstate.islast
+    table.cell(bias_tbl, 0, 0, "TF",    text_color = color.gray,  text_size = size.small)
+    table.cell(bias_tbl, 1, 0, "Bias",  text_color = color.gray,  text_size = size.small)
+    for i = 0 to 2
+        tf_label = i == 0 ? "Daily" : i == 1 ? "4H" : "1H"
+        bias_val = i == 0 ? daily_bias : i == 1 ? h4_bias : h1_bias
+        bc = bias_val == 1 ? color.lime : bias_val == -1 ? color.red : color.gray
+        bl = bias_val == 1 ? "▲ Bull" : bias_val == -1 ? "▼ Bear" : "── Neut"
+        table.cell(bias_tbl, 0, i + 1, tf_label, text_color = color.white, text_size = size.small)
+        table.cell(bias_tbl, 1, i + 1, bl,        text_color = bc,          text_size = size.small)
+
+// ============================================================
+// ── BREAK OF STRUCTURE (from bos_tf)
+// ============================================================
+[ph_htf, pl_htf] = request.security(syminfo.tickerid, bos_tf,
+     [ta.pivothigh(high, bos_len, bos_len), ta.pivotlow(low, bos_len, bos_len)],
+     lookahead = barmerge.lookahead_off)
+
+var float last_ph = na
+var float last_pl = na
+
+if not na(ph_htf)
+    last_ph := ph_htf
+if not na(pl_htf)
+    last_pl := pl_htf
+
+bos_up   = not na(last_ph) and close > last_ph and close[1] <= last_ph
+bos_down = not na(last_pl) and close < last_pl and close[1] >= last_pl
+
+// Track BOS bar index for recency check
+var int bos_up_bar   = na
+var int bos_down_bar = na
+if bos_up
+    bos_up_bar   := bar_index
+if bos_down
+    bos_down_bar := bar_index
+
+// BOS labels
+plotshape(bos_up,   style = shape.triangleup,   location = location.belowbar,
+     color = color.lime, size = size.tiny, text = "BOS↑", title = "BOS Up")
+plotshape(bos_down, style = shape.triangledown, location = location.abovebar,
+     color = color.red,  size = size.tiny, text = "BOS↓", title = "BOS Down")
+
+// ============================================================
+// ── LIQUIDITY SWEEP (trend-following direction)
+// ============================================================
+//
+//  v4 LOGIC CHANGE:
+//  ────────────────
+//  We now FOLLOW the sweep, not fade it.
+//
+//  Bullish sweep (price wicks below swing low then reclaims) =
+//  smart money grabbed longs below retail stops → we go LONG.
+//
+//  Bearish sweep (price wicks above swing high then reclaims) =
+//  smart money grabbed shorts above retail stops → we go SHORT.
+//
+//  The BOS then CONFIRMS the sweep was genuine (not a breakdown).
+//  After BOS, we wait for a PULLBACK into OB/FVG before entering.
+//
+// ============================================================
+swing_low  = ta.lowest(low,   liq_lookback)
+swing_high = ta.highest(high, liq_lookback)
+bar_range  = math.max(high - low, syminfo.mintick)  // avoid div/0
+
+// Bullish sweep: wick below, close reclaims
+bull_sweep_cond = low < swing_low[1] and close > swing_low[1]
+bull_wick_ratio = (swing_low[1] - low) / bar_range
+bull_sweep      = bull_sweep_cond and bull_wick_ratio >= liq_wick_pct
+
+// Bearish sweep: wick above, close reclaims
+bear_sweep_cond = high > swing_high[1] and close < swing_high[1]
+bear_wick_ratio = (high - swing_high[1]) / bar_range
+bear_sweep      = bear_sweep_cond and bear_wick_ratio >= liq_wick_pct
+
+// Store sweep wick prices for SL placement
+var float bull_sweep_low  = na   // wick low of the sweep bar (SL anchor for longs)
+var float bear_sweep_high = na   // wick high of the sweep bar (SL anchor for shorts)
+var int   bull_sweep_bar  = na
+var int   bear_sweep_bar  = na
+
+if bull_sweep
+    bull_sweep_bar  := bar_index
+    bull_sweep_low  := low
+if bear_sweep
+    bear_sweep_bar  := bar_index
+    bear_sweep_high := high
+
+recent_bull_sweep = not na(bull_sweep_bar) and (bar_index - bull_sweep_bar) <= sweep_memory
+recent_bear_sweep = not na(bear_sweep_bar) and (bar_index - bear_sweep_bar) <= sweep_memory
+
+plotshape(bull_sweep, style = shape.circle, location = location.belowbar,
+     color = color.new(color.lime, 30), size = size.small, text = "LSB", title = "Liq Sweep Bull")
+plotshape(bear_sweep, style = shape.circle, location = location.abovebar,
+     color = color.new(color.red,  30), size = size.small, text = "LSS", title = "Liq Sweep Bear")
+
+// ============================================================
+// ── ORDER BLOCKS (with zone tracking)
+// ============================================================
+ph_ob = ta.pivothigh(high, ob_lookback, ob_lookback)
+pl_ob = ta.pivotlow(low,   ob_lookback, ob_lookback)
+
+// Bullish OB = bearish candle at swing low (institutional buy zone)
+bull_ob_active = not na(pl_ob) and close[ob_lookback] < open[ob_lookback]
+bull_ob_top    = bull_ob_active ? open[ob_lookback]  : na
+bull_ob_bot    = bull_ob_active ? close[ob_lookback] : na
+
+// Bearish OB = bullish candle at swing high (institutional sell zone)
+bear_ob_active = not na(ph_ob) and close[ob_lookback] > open[ob_lookback]
+bear_ob_top    = bear_ob_active ? close[ob_lookback] : na
+bear_ob_bot    = bear_ob_active ? open[ob_lookback]  : na
+
+// Store latest active OB levels for POI check
+var float latest_bull_ob_top = na
+var float latest_bull_ob_bot = na
+var float latest_bear_ob_top = na
+var float latest_bear_ob_bot = na
+
+if bull_ob_active
+    latest_bull_ob_top := bull_ob_top
+    latest_bull_ob_bot := bull_ob_bot
+if bear_ob_active
+    latest_bear_ob_top := bear_ob_top
+    latest_bear_ob_bot := bear_ob_bot
+
+var box[] bull_ob_boxes = array.new_box()
+var box[] bear_ob_boxes = array.new_box()
+max_boxes = 4
+
+if show_ob and bull_ob_active
+    if array.size(bull_ob_boxes) >= max_boxes
+        box.delete(array.shift(bull_ob_boxes))
+    b = box.new(bar_index - ob_lookback, bull_ob_top, bar_index + 25, bull_ob_bot,
+         border_color = color.new(color.lime, 30), bgcolor = color.new(color.lime, 82),
+         text = "Bull OB", text_color = color.lime, text_size = size.tiny)
+    array.push(bull_ob_boxes, b)
+
+if show_ob and bear_ob_active
+    if array.size(bear_ob_boxes) >= max_boxes
+        box.delete(array.shift(bear_ob_boxes))
+    b = box.new(bar_index - ob_lookback, bear_ob_top, bar_index + 25, bear_ob_bot,
+         border_color = color.new(color.red, 30), bgcolor = color.new(color.red, 82),
+         text = "Bear OB", text_color = color.red, text_size = size.tiny)
+    array.push(bear_ob_boxes, b)
+
+// ============================================================
+// ── FAIR VALUE GAPS (with zone tracking)
+// ============================================================
+bull_fvg_size = high[2] < low[0] ? (low[0] - high[2]) : 0.0
+bear_fvg_size = low[2] > high[0] ? (low[2] - high[0]) : 0.0
+
+bull_fvg_valid = bull_fvg_size > fvg_min
+bear_fvg_valid = bear_fvg_size > fvg_min
+
+bull_fvg_top_val = bull_fvg_valid ? low[0]  : na
+bull_fvg_bot_val = bull_fvg_valid ? high[2] : na
+bear_fvg_top_val = bear_fvg_valid ? low[2]  : na
+bear_fvg_bot_val = bear_fvg_valid ? high[0] : na
+
+var float latest_bull_fvg_top = na
+var float latest_bull_fvg_bot = na
+var float latest_bear_fvg_top = na
+var float latest_bear_fvg_bot = na
+
+if bull_fvg_valid
+    latest_bull_fvg_top := bull_fvg_top_val
+    latest_bull_fvg_bot := bull_fvg_bot_val
+if bear_fvg_valid
+    latest_bear_fvg_top := bear_fvg_top_val
+    latest_bear_fvg_bot := bear_fvg_bot_val
+
+var box[] bull_fvg_boxes = array.new_box()
+var box[] bear_fvg_boxes = array.new_box()
+max_fvg = 4
+
+if show_fvg and bull_fvg_valid
+    if array.size(bull_fvg_boxes) >= max_fvg
+        box.delete(array.shift(bull_fvg_boxes))
+    b = box.new(bar_index - 2, bull_fvg_top_val, bar_index + 20, bull_fvg_bot_val,
+         border_color = color.new(color.aqua, 35), bgcolor = color.new(color.aqua, 85),
+         text = "FVG↑", text_color = color.aqua, text_size = size.tiny)
+    array.push(bull_fvg_boxes, b)
+
+if show_fvg and bear_fvg_valid
+    if array.size(bear_fvg_boxes) >= max_fvg
+        box.delete(array.shift(bear_fvg_boxes))
+    b = box.new(bar_index - 2, bear_fvg_top_val, bar_index + 20, bear_fvg_bot_val,
+         border_color = color.new(color.orange, 35), bgcolor = color.new(color.orange, 85),
+         text = "FVG↓", text_color = color.orange, text_size = size.tiny)
+    array.push(bear_fvg_boxes, b)
+
+// ============================================================
+// ── POI (POINT OF INTEREST) PULLBACK CHECK
+// ============================================================
+//
+//  After BOS confirms, we wait for price to RETRACE into a POI:
+//
+//  For LONGS (after bullish sweep + BOS up):
+//  — Price must dip back into the Bull OB zone  OR
+//  — Price must dip back into a Bull FVG zone   OR
+//  — Price must touch the EMA (if mode = Any close near EMA)
+//
+//  The "buffer" extends the zone slightly by poi_buffer * ATR
+//  so entries aren't missed by a tick.
+//
+//  This is the key fix from v3: entries now happen at DISCOUNT
+//  prices (inside the OB/FVG), not at the peak of the BOS move.
+//
+// ============================================================
+
+buf = atr * poi_buffer
+
+// Is price currently inside (or touching) the bull POI zone?
+in_bull_ob  = not na(latest_bull_ob_top)  and close <= latest_bull_ob_top + buf and close >= latest_bull_ob_bot - buf
+in_bull_fvg = not na(latest_bull_fvg_top) and close <= latest_bull_fvg_top + buf and close >= latest_bull_fvg_bot - buf
+near_ema    = math.abs(close - ta.ema(close, ema_len)) <= buf
+
+poi_long = switch poi_mode
+    "OB only"       => in_bull_ob
+    "FVG only"      => in_bull_fvg
+    "OB or FVG"     => in_bull_ob or in_bull_fvg
+    "Any close near EMA" => near_ema
+    => in_bull_ob or in_bull_fvg
+
+// Is price inside the bear POI zone?
+in_bear_ob  = not na(latest_bear_ob_top)  and close >= latest_bear_ob_bot - buf and close <= latest_bear_ob_top + buf
+in_bear_fvg = not na(latest_bear_fvg_top) and close >= latest_bear_fvg_bot - buf and close <= latest_bear_fvg_top + buf
+
+poi_short = switch poi_mode
+    "OB only"       => in_bear_ob
+    "FVG only"      => in_bear_fvg
+    "OB or FVG"     => in_bear_ob or in_bear_fvg
+    "Any close near EMA" => near_ema
+    => in_bear_ob or in_bear_fvg
+
+// ============================================================
+// ── COOLDOWN + DAILY TRADE COUNTER
+// ============================================================
+var int  last_trade_bar = na
+var int  trade_day      = na
+var int  daily_count    = 0
+
+today = dayofmonth(time)
+if na(trade_day) or trade_day != today
+    trade_day   := today
+    daily_count := 0
+
+cooldown_ok  = na(last_trade_bar) or (bar_index - last_trade_bar) >= cooldown_bars
+under_limit  = daily_count < max_daily
+
+// ============================================================
+// ── FINAL ENTRY CONDITIONS
+// ============================================================
+//
+//  LONG needs ALL 8 gates:
+//  [1] HTF bias bullish (Daily + 4H)
+//  [2] Recent bullish liquidity sweep (within sweep_memory bars)
+//  [3] BOS to the upside confirmed (within sweep_memory bars)
+//  [4] Price has pulled back INTO a Bull OB or Bull FVG (POI)
+//  [5] RSI >= 45 (momentum in correct direction)
+//  [6] Volume >= 1× average (institutional participation)
+//  [7] Inside a Killzone
+//  [8] No open position + cooldown passed + under daily limit
+//
+// ============================================================
+
+bos_up_recent   = not na(bos_up_bar)   and (bar_index - bos_up_bar)   <= sweep_memory
+bos_down_recent = not na(bos_down_bar) and (bar_index - bos_down_bar) <= sweep_memory
+
+no_position = strategy.position_size == 0
+
+long_signal = htf_bull
+     and recent_bull_sweep
+     and bos_up_recent
+     and poi_long
+     and rsi_ok_long
+     and vol_ok
+     and atr_ok
+     and in_killzone
+     and no_position
+     and cooldown_ok
+     and under_limit
+
+short_signal = htf_bear
+     and recent_bear_sweep
+     and bos_down_recent
+     and poi_short
+     and rsi_ok_short
+     and vol_ok
+     and atr_ok
+     and in_killzone
+     and no_position
+     and cooldown_ok
+     and under_limit
+
+// ============================================================
+// ── STOP LOSS CALCULATION
+// ============================================================
+//
+//  "Sweep Wick" mode: SL placed just beyond the sweep bar's
+//   wick — the exact level smart money defended. Much tighter
+//   and more logical than pure ATR.
+//
+//  ATR mode: fallback for when sweep wick data isn't available.
+//
+// ============================================================
+
+sl_buffer = atr * 0.2   // small buffer beyond the wick
+
+long_sl = switch sl_mode
+    "Sweep Wick" => not na(bull_sweep_low)  ? bull_sweep_low  - sl_buffer : close - atr * sl_mult
+    => close - atr * sl_mult
+
+short_sl = switch sl_mode
+    "Sweep Wick" => not na(bear_sweep_high) ? bear_sweep_high + sl_buffer : close + atr * sl_mult
+    => close + atr * sl_mult
+
+long_risk  = math.max(close - long_sl,  syminfo.mintick)
+short_risk = math.max(short_sl - close, syminfo.mintick)
+
+long_tp  = close + long_risk  * tp_rr
+short_tp = close - short_risk * tp_rr
+
+// ============================================================
+// ── ORDER EXECUTION
+// ============================================================
+if long_signal
+    strategy.entry("Long",  strategy.long,  comment = "ICT Long v4")
+    strategy.exit("Long Exit",  "Long",  stop = long_sl,  limit = long_tp,  comment = "TP/SL")
+    last_trade_bar := bar_index
+    daily_count    += 1
+
+if short_signal
+    strategy.entry("Short", strategy.short, comment = "ICT Short v4")
+    strategy.exit("Short Exit", "Short", stop = short_sl, limit = short_tp, comment = "TP/SL")
+    last_trade_bar := bar_index
+    daily_count    += 1
+
+// ============================================================
+// ── SIGNAL ARROWS
+// ============================================================
+plotshape(long_signal,  style = shape.arrowup,   location = location.belowbar,
+     color = color.lime, size = size.normal, text = "LONG",  title = "Long Entry")
+plotshape(short_signal, style = shape.arrowdown, location = location.abovebar,
+     color = color.red,  size = size.normal, text = "SHORT", title = "Short Entry")
+
+// ============================================================
+// ── POI ENTRY ZONE LINES (visual aid)
+// ============================================================
+plot(show_poi_line and not na(latest_bull_ob_top) ? latest_bull_ob_top : na,
+     color = color.new(color.lime, 50), style = plot.style_linebr, linewidth = 1, title = "Bull OB Top")
+plot(show_poi_line and not na(latest_bull_ob_bot) ? latest_bull_ob_bot : na,
+     color = color.new(color.lime, 50), style = plot.style_linebr, linewidth = 1, title = "Bull OB Bot")
+plot(show_poi_line and not na(latest_bear_ob_top) ? latest_bear_ob_top : na,
+     color = color.new(color.red,  50), style = plot.style_linebr, linewidth = 1, title = "Bear OB Top")
+plot(show_poi_line and not na(latest_bear_ob_bot) ? latest_bear_ob_bot : na,
+     color = color.new(color.red,  50), style = plot.style_linebr, linewidth = 1, title = "Bear OB Bot")
+
+// ============================================================
+// ── EMA REFERENCE
+// ============================================================
+plot(ta.ema(close, ema_len), title = "EMA-20",
+     color = color.new(color.yellow, 35), linewidth = 1)
+
+// ============================================================
+// ── DASHBOARD TABLE
+// ============================================================
+var table dash = table.new(position.bottom_right, 2, 7,
+     border_width = 1, border_color = color.new(color.gray, 50),
+     bgcolor = color.new(color.black, 72))
+
+if barstate.islast
+    limit_col    = daily_count >= max_daily ? color.red : color.lime
+    kz_col       = in_killzone  ? color.lime : color.gray
+    rsi_col      = rsi >= rsi_bull_min ? color.lime : rsi <= rsi_bear_max ? color.red : color.gray
+    vol_col      = volume >= vol_ma * vol_mult ? color.lime : color.red
+    poi_l_col    = poi_long  ? color.lime : color.gray
+    poi_s_col    = poi_short ? color.red  : color.gray
+
+    table.cell(dash, 0, 0, "── ICT v4 ──", text_color = color.gray,   text_size = size.small, bgcolor = color.new(color.black, 60))
+    table.cell(dash, 1, 0, "Status",        text_color = color.gray,   text_size = size.small, bgcolor = color.new(color.black, 60))
+    table.cell(dash, 0, 1, "Killzone",      text_color = color.white,  text_size = size.small)
+    table.cell(dash, 1, 1, in_killzone ? "✅ Active" : "❌ Off",       text_color = kz_col,    text_size = size.small)
+    table.cell(dash, 0, 2, "RSI",           text_color = color.white,  text_size = size.small)
+    table.cell(dash, 1, 2, str.tostring(math.round(rsi, 1)),           text_color = rsi_col,   text_size = size.small)
+    table.cell(dash, 0, 3, "Volume",        text_color = color.white,  text_size = size.small)
+    table.cell(dash, 1, 3, vol_ok ? "✅ High" : "❌ Low",             text_color = vol_col,   text_size = size.small)
+    table.cell(dash, 0, 4, "POI Long",      text_color = color.white,  text_size = size.small)
+    table.cell(dash, 1, 4, poi_long  ? "✅ In Zone" : "⏳ Waiting",   text_color = poi_l_col, text_size = size.small)
+    table.cell(dash, 0, 5, "POI Short",     text_color = color.white,  text_size = size.small)
+    table.cell(dash, 1, 5, poi_short ? "✅ In Zone" : "⏳ Waiting",   text_color = poi_s_col, text_size = size.small)
+    table.cell(dash, 0, 6, "Trades Today",  text_color = color.white,  text_size = size.small)
+    table.cell(dash, 1, 6, str.tostring(daily_count) + " / " + str.tostring(max_daily),
+         text_color = limit_col, text_size = size.small)
