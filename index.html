@@ -24,24 +24,36 @@
             margin: 0 auto;
         }
         header {
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 50px;
             padding: 40px 0;
+            flex-wrap: wrap;
         }
         h1 {
-            font-size: 3rem;
+            font-size: 2.5rem;
             font-weight: 700;
             background: linear-gradient(45deg, #00d4ff, #00ff88);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
-            margin-bottom: 10px;
             text-shadow: 0 0 30px rgba(0, 212, 255, 0.3);
         }
-        .subtitle {
-            font-size: 1.2rem;
-            color: #b0b0b0;
-            font-weight: 300;
+        .github-btn {
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            color: #000;
+            padding: 12px 24px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+        .github-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5);
         }
         .section {
             margin-bottom: 60px;
@@ -65,6 +77,53 @@
             max-width: 800px;
             margin: 0 auto;
             color: #d0d0d0;
+        }
+        .calculator {
+            text-align: center;
+            margin-top: 30px;
+        }
+        .calculator label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 1.2rem;
+            color: #00d4ff;
+        }
+        .calculator input[type="range"] {
+            width: 100%;
+            max-width: 400px;
+            margin: 20px 0;
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            border-radius: 5px;
+            outline: none;
+        }
+        .calculator input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 25px;
+            height: 25px;
+            background: #00ff88;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+        }
+        .calculator input[type="range"]::-moz-range-thumb {
+            width: 25px;
+            height: 25px;
+            background: #00ff88;
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            border: none;
+        }
+        .projected-return {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #00ff88;
+            margin-top: 20px;
+            text-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
         }
         .metrics-grid {
             display: grid;
@@ -106,15 +165,102 @@
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
             margin-top: 20px;
         }
+        .modal-btn {
+            display: block;
+            margin: 0 auto;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            color: #000;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 212, 255, 0.3);
+        }
+        .modal-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 212, 255, 0.5);
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: rgba(26, 26, 46, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+        .modal h3 {
+            color: #00ff88;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .trade-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .trade-table th, .trade-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .trade-table th {
+            background: rgba(0, 212, 255, 0.1);
+            color: #00d4ff;
+            font-weight: 600;
+        }
+        .trade-table td {
+            color: #e0e0e0;
+        }
+        .close-btn {
+            background: #ff4757;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-top: 20px;
+            transition: background 0.3s ease;
+        }
+        .close-btn:hover {
+            background: #ff3742;
+        }
         @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                text-align: center;
+            }
             h1 {
                 font-size: 2rem;
+                margin-bottom: 20px;
             }
             .section {
                 padding: 20px;
             }
             .metrics-grid {
                 grid-template-columns: 1fr;
+            }
+            .modal-content {
+                padding: 20px;
             }
         }
     </style>
@@ -123,12 +269,21 @@
     <div class="container">
         <header>
             <h1>Institutional Multi-Timeframe Strategy (SMC/ICT)</h1>
-            <div class="subtitle">Algorithmic Trading Dashboard</div>
+            <a href="https://github.com/imayushx/trading" class="github-btn" target="_blank">View Source Code on GitHub</a>
         </header>
 
         <section class="section overview">
             <h2>Project Overview</h2>
-            <p>This is a rule-based algorithmic trading system that trades XAUUSD and EURUSD pairs. It utilizes Smart Money Concepts (SMC), Order Blocks, and Time-based Killzones to identify high-probability trade setups while eliminating emotional decision-making. The strategy focuses on institutional-level analysis to capture market inefficiencies across multiple timeframes.</p>
+            <p>This is a rule-based algorithmic trading system that trades XAUUSD and EURUSD pairs using Python and Pine Script. It executes trades based on Smart Money Concepts (SMC), Order Blocks, and Time-based Killzones to identify high-probability setups while eliminating emotional decision-making. The strategy focuses on institutional-level analysis to capture market inefficiencies across multiple timeframes.</p>
+        </section>
+
+        <section class="section">
+            <h2>Interactive ROI Calculator</h2>
+            <div class="calculator">
+                <label for="capital-slider">Select Starting Capital: $<span id="capital-value">50000</span></label>
+                <input type="range" id="capital-slider" min="1000" max="100000" value="50000" step="1000">
+                <div class="projected-return">Projected Return: $<span id="projected-return">72500</span></div>
+            </div>
         </section>
 
         <section class="section">
@@ -157,6 +312,105 @@
             <h2>Equity Curve</h2>
             <img src="performance.png" alt="Equity Curve" class="equity-image">
         </section>
+
+        <section class="section">
+            <button class="modal-btn" onclick="openModal()">View Raw Trade Log</button>
+        </section>
     </div>
+
+    <div id="trade-modal" class="modal">
+        <div class="modal-content">
+            <h3>Raw Trade Log</h3>
+            <table class="trade-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Asset</th>
+                        <th>Direction</th>
+                        <th>Entry Price</th>
+                        <th>Exit Price</th>
+                        <th>P/L</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>2025-06-11</td>
+                        <td>XAUUSD</td>
+                        <td>Long</td>
+                        <td>3318.03</td>
+                        <td>3318.03</td>
+                        <td>-46.76</td>
+                    </tr>
+                    <tr>
+                        <td>2025-06-19</td>
+                        <td>XAUUSD</td>
+                        <td>Long</td>
+                        <td>3368.71</td>
+                        <td>3368.71</td>
+                        <td>-42.04</td>
+                    </tr>
+                    <tr>
+                        <td>2025-06-26</td>
+                        <td>XAUUSD</td>
+                        <td>Short</td>
+                        <td>3336.55</td>
+                        <td>3336.55</td>
+                        <td>-45.02</td>
+                    </tr>
+                    <tr>
+                        <td>2025-07-01</td>
+                        <td>XAUUSD</td>
+                        <td>Short</td>
+                        <td>3351.82</td>
+                        <td>3351.82</td>
+                        <td>-169.15</td>
+                    </tr>
+                    <tr>
+                        <td>2025-07-03</td>
+                        <td>XAUUSD</td>
+                        <td>Long</td>
+                        <td>3357.53</td>
+                        <td>3357.53</td>
+                        <td>58.52</td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="close-btn" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // ROI Calculator
+        const capitalSlider = document.getElementById('capital-slider');
+        const capitalValue = document.getElementById('capital-value');
+        const projectedReturn = document.getElementById('projected-return');
+
+        function updateCalculator() {
+            const capital = parseInt(capitalSlider.value);
+            capitalValue.textContent = capital.toLocaleString();
+            const projected = Math.round(capital * 1.45);
+            projectedReturn.textContent = projected.toLocaleString();
+        }
+
+        capitalSlider.addEventListener('input', updateCalculator);
+        updateCalculator(); // Initialize
+
+        // Modal functions
+        function openModal() {
+            document.getElementById('trade-modal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('trade-modal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('trade-modal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        }
+    </script>
 </body>
 </html>
